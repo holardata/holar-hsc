@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hsc.calltask.mapper.CustomerPoolLogMapper">
+
+    <!-- 客户流转时间线：归属动作与外呼明细混排（金蝶订单日志式，设计 D10） -->
+    <select id="getTransferTimeline" resultType="com.hsc.calltask.domain.vo.CustomerTransferTimelineVo">
+        select t.* from (
+            select l.id,
+                   1          as eventType,
+                   l.action    as action,
+                   l.create_time as eventTime,
+                   sa1.name    as fromAgentName,
+                   su1.user_name as fromAgentUserName,
+                   sa2.name    as toAgentName,
+                   su2.user_name as toAgentUserName,
+                   su.user_name as operatorName,
+                   l.reason    as reason,
+                   null        as dialLogId,
+                   null        as taskName,
+                   null        as agentName,
+                   null        as phone,
+                   null        as callId,
+                   null        as callResult,
+                   null        as talkDuration,
+                   null        as disposition
+            from customer_pool_log l
+                     left join sip_agent sa1 on l.from_agent = sa1.id
+                     left join sys_user su1 on sa1.user_id = su1.user_id
+                     left join sip_agent sa2 on l.to_agent = sa2.id
+                     left join sys_user su2 on sa2.user_id = su2.user_id
+                     left join sys_user su on l.operator = su.user_id
+            where l.customer_id = #{customerId}
+            union all
+            select d.id,
+                   2            as eventType,
+                   null         as action,
+                   d.dial_time  as eventTime,
+                   null         as fromAgentName,
+                   null         as fromAgentUserName,
+                   null         as toAgentName,
+                   null         as toAgentUserName,
+                   null         as operatorName,
+                   null         as reason,
+                   d.id         as dialLogId,
+                   ct.name      as taskName,
+                   sa.name      as agentName,
+                   d.phone      as phone,
+                   d.call_id    as callId,
+                   d.call_result as callResult,
+                   d.talk_duration as talkDuration,
+                   d.disposition as disposition
+            from call_task_dial_log d
+                     left join call_task ct on d.task_id = ct.id
+                     left join sip_agent sa on d.agent_id = sa.id
+            where d.customer_id = #{customerId}
+              and d.del_flag = 0
+        ) t
+        order by t.eventTime desc
+    </select>
+</mapper>

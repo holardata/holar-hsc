@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 本文件基于 openCallHub（GPL-3.0）修改：修改者 jackzhang，2026-09 -->
+<!-- Modified from openCallHub (GPL-3.0) by jackzhang, 2026-09. -->
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.hsc</groupId>
+        <artifactId>holarSmartCall</artifactId>
+        <version>0.0.1</version>
+    </parent>
+    <groupId>com.hsc</groupId>
+    <artifactId>hsc-system</artifactId>
+    <version>0.0.1</version>
+    <name>hsc-system</name>
+    <description>hsc-system</description>
+
+    <properties>
+        <java.version>17</java.version>
+    </properties>
+    <dependencies>
+
+        <dependency>
+            <groupId>com.hsc</groupId>
+            <artifactId>hsc-common</artifactId>
+            <version>0.0.1</version>
+        </dependency>
+
+        <dependency>
+            <groupId>cn.hutool</groupId>
+            <artifactId>hutool-http</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.hsc</groupId>
+            <artifactId>hsc-file</artifactId>
+            <version>0.0.1</version>
+            <scope>compile</scope>
+        </dependency>
+        <!-- hsc-ai：LLM 统一网关。hsc-system 实现 hsc-ai 的 ILlmConfigProvider（供摘要 Service 取模型/提示词）；
+             同时 hsc-system 业务层经 hsc-ai 调用 LLM，遵循"LLM 调用唯一出口"约束。依赖方向：业务→基础设施。 -->
+        <dependency>
+            <groupId>com.hsc</groupId>
+            <artifactId>hsc-ai</artifactId>
+            <version>0.0.1</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.tomcat.embed</groupId>
+            <artifactId>tomcat-embed-core</artifactId>
+        </dependency>
+        <!-- ASR 连通性测试（AsrConnectivityTester）用 Java-WebSocket：wss 信任所有证书 + 禁主机名验证，兼容 IP/自签证书。与 reminder_backend 一致 -->
+        <dependency>
+            <groupId>org.java-websocket</groupId>
+            <artifactId>Java-WebSocket</artifactId>
+            <version>1.5.3</version>
+        </dependency>
+    </dependencies>
+
+
+
+</project>

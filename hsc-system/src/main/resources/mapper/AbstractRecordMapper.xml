@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hsc.system.mapper.AbstractRecordMapper">
+
+    <!-- 过程摘要逐条反馈按天聚合（满意率统计用）：列别名 statDate/abstractGood/abstractBad -->
+    <select id="selectFeedbackTrend" resultType="java.util.HashMap">
+        SELECT DATE_FORMAT(create_time, '%Y-%m-%d')              AS statDate,
+               SUM(CASE WHEN feedback = 1 THEN 1 ELSE 0 END)     AS abstractGood,
+               SUM(CASE WHEN feedback = 2 THEN 1 ELSE 0 END)     AS abstractBad
+        FROM abstract_record
+        WHERE del_flag = 0
+        <if test="begin != null and begin != ''">
+            AND create_time &gt;= #{begin}
+        </if>
+        <if test="end != null and end != ''">
+            AND create_time &lt; DATE_ADD(#{end}, INTERVAL 1 DAY)
+        </if>
+        GROUP BY statDate
+        ORDER BY statDate
+    </select>
+</mapper>

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hsc.system.mapper.VoiceEngineMapper">
+
+    <resultMap type="com.hsc.system.domain.entity.VoiceEngine" id="VoiceEngineMap">
+        <result property="id" column="id" jdbcType="INTEGER"/>
+        <result property="name" column="name" jdbcType="VARCHAR"/>
+        <result property="engineType" column="engine_type" jdbcType="VARCHAR"/>
+        <result property="config" column="config" jdbcType="VARCHAR"/>
+        <result property="remark" column="remark" jdbcType="VARCHAR"/>
+        <result property="createBy" column="create_by" jdbcType="INTEGER"/>
+        <result property="createTime" column="create_time" jdbcType="TIMESTAMP"/>
+        <result property="updateBy" column="update_by" jdbcType="INTEGER"/>
+        <result property="updateTime" column="update_time" jdbcType="TIMESTAMP"/>
+        <result property="delFlag" column="del_flag" jdbcType="INTEGER"/>
+    </resultMap>
+
+    <sql id="selectVoiceEngineInfoVo">
+        select id,name,engine_type,config,remark,create_by,create_time,update_by,update_time,del_flag from voice_engine
+   </sql>
+
+    <select id="getList" resultMap="VoiceEngineMap">
+        <include refid="selectVoiceEngineInfoVo"/>
+        <where>
+            <if test="name != null and name != ''">
+                and name like concat('%', #{name}, '%')
+            </if>
+            <if test="engineType != null and engineType != ''">
+                and engine_type = #{engineType}
+            </if>
+            <!-- kind 为前端便捷过滤：asr → 4 种 ASR 类型，tts → 5 种 TTS 类型 -->
+            <if test="kind != null and kind == 'asr'">
+                and engine_type in ('funasr', 'aliyun-nls', 'tencent-asr', 'xfyun-asr')
+            </if>
+            <if test="kind != null and kind == 'tts'">
+                and engine_type in ('aliyun-tts', 'pro', 'openai-tts', 'holartts', 'volc-tts')
+            </if>
+            and del_flag = 0
+        </where>
+        order by id desc
+    </select>
+
+</mapper>

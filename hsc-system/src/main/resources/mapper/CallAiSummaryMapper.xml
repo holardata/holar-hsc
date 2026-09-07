@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hsc.system.mapper.CallAiSummaryMapper">
+
+    <!-- 摘要反馈按天聚合（满意率统计用）：列别名 statDate + {dim}Good/{dim}Bad -->
+    <select id="selectFeedbackTrend" resultType="java.util.HashMap">
+        SELECT DATE_FORMAT(create_time, '%Y-%m-%d')                   AS statDate,
+               SUM(CASE WHEN summary_feedback = 1 THEN 1 ELSE 0 END)  AS summaryGood,
+               SUM(CASE WHEN summary_feedback = 2 THEN 1 ELSE 0 END)  AS summaryBad,
+               SUM(CASE WHEN keyword_feedback = 1 THEN 1 ELSE 0 END)  AS keywordGood,
+               SUM(CASE WHEN keyword_feedback = 2 THEN 1 ELSE 0 END)  AS keywordBad,
+               SUM(CASE WHEN role_feedback = 1 THEN 1 ELSE 0 END)     AS roleGood,
+               SUM(CASE WHEN role_feedback = 2 THEN 1 ELSE 0 END)     AS roleBad,
+               SUM(CASE WHEN keypoint_feedback = 1 THEN 1 ELSE 0 END) AS keypointGood,
+               SUM(CASE WHEN keypoint_feedback = 2 THEN 1 ELSE 0 END) AS keypointBad,
+               SUM(CASE WHEN todo_feedback = 1 THEN 1 ELSE 0 END)     AS todoGood,
+               SUM(CASE WHEN todo_feedback = 2 THEN 1 ELSE 0 END)     AS todoBad
+        FROM call_ai_summary
+        WHERE del_flag = 0
+        <if test="begin != null and begin != ''">
+            AND create_time &gt;= #{begin}
+        </if>
+        <if test="end != null and end != ''">
+            AND create_time &lt; DATE_ADD(#{end}, INTERVAL 1 DAY)
+        </if>
+        GROUP BY statDate
+        ORDER BY statDate
+    </select>
+</mapper>

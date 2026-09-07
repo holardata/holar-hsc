@@ -1,0 +1,204 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hsc.system.mapper.CallStatMapper">
+
+    <!-- 指标卡单段聚合：口径 D4（接通=answer_flag=0；direction 1=呼出 2=呼入；放弃=呼入未接通） -->
+    <select id="selectOverview" resultType="java.util.HashMap">
+        SELECT COUNT(*)                                                        AS totalCall,
+               SUM(CASE WHEN direction = 2 THEN 1 ELSE 0 END)                  AS inbound,
+               SUM(CASE WHEN direction = 1 THEN 1 ELSE 0 END)                  AS outbound,
+               SUM(CASE WHEN answer_flag = 0 THEN 1 ELSE 0 END)                AS answeredCount,
+               SUM(CASE WHEN direction = 2 AND answer_flag != 0 THEN 1 ELSE 0 END) AS abandoned,
+               SUM(CASE WHEN is_ai_first = 1 THEN 1 ELSE 0 END)                AS aiAnswered,
+               SUM(CASE WHEN transfer_human = 1 THEN 1 ELSE 0 END)             AS transferCount,
+               AVG(CASE WHEN answer_flag = 0 THEN TIMESTAMPDIFF(SECOND, answer_time, call_end_time) END) AS avgDurationSec
+        FROM call_record
+        WHERE del_flag = 0
+          AND call_start_time &gt;= #{begin}
+          AND call_start_time &lt; #{end}
+    </select>
+
+    <!-- 按粒度序列聚合（trend/sparkline 共用）：label + 全部原始量，比率由 Service 计算 -->
+    <select id="selectSeries" resultType="java.util.HashMap">
+        SELECT DATE_FORMAT(call_start_time, #{fmt})                            AS label,
+               COUNT(*)                                                        AS totalCall,
+               SUM(CASE WHEN direction = 2 THEN 1 ELSE 0 END)                  AS inbound,
+               SUM(CASE WHEN direction = 1 THEN 1 ELSE 0 END)                  AS outbound,
+               SUM(CASE WHEN answer_flag = 0 THEN 1 ELSE 0 END)                AS answeredCount,
+               SUM(CASE WHEN direction = 2 AND answer_flag != 0 THEN 1 ELSE 0 END) AS abandoned,
+               SUM(CASE WHEN is_ai_first = 1 THEN 1 ELSE 0 END)                AS aiAnswered,
+               SUM(CASE WHEN transfer_human = 1 THEN 1 ELSE 0 END)             AS transferCount,
+               AVG(CASE WHEN answer_flag = 0 THEN TIMESTAMPDIFF(SECOND, answer_time, call_end_time) END) AS avgDurationSec
+        FROM call_record
+        WHERE del_flag = 0
+          AND call_start_time &gt;= #{begin}
+          AND call_start_time &lt; #{end}
+        GROUP BY label
+        ORDER BY MIN(call_start_time)
+    </select>
+
+    <!-- 归属地省级：merger_name="中国,陕西省,西安市" 第 2 段=省全名（与地图 GeoJSON 对齐），空值过滤 -->
+    <select id="selectRegionProvince" resultType="java.util.HashMap">
+        SELECT SUBSTRING_INDEX(SUBSTRING_INDEX(number_location, ',', 2), ',', -1) AS province,
+               SUM(CASE WHEN direction = 2 THEN 1 ELSE 0 END)                     AS inbound,
+               SUM(CASE WHEN direction = 1 THEN 1 ELSE 0 END)                     AS outbound
+        FROM call_record
+        WHERE del_flag = 0
+          AND number_location IS NOT NULL
+          AND number_location != ''
+          AND call_start_time &gt;= #{begin}
+          AND call_start_time &lt; #{end}
+        GROUP BY province
+    </select>
+
+    <!-- 归属地省内市级：第 3 段=市全名（已带"市"字，天然对齐 GeoJSON；取第 3 段而非末段，防区县级 merger 混入） -->
+    <select id="selectRegionCity" resultType="java.util.HashMap">
+        SELECT SUBSTRING_INDEX(SUBSTRING_INDEX(number_location, ',', 3), ',', -1) AS city,
+               SUM(CASE WHEN direction = 2 THEN 1 ELSE 0 END)                     AS inbound,
+               SUM(CASE WHEN direction = 1 THEN 1 ELSE 0 END)                     AS outbound
+        FROM call_record
+        WHERE del_flag = 0
+          AND number_location IS NOT NULL
+          AND number_location != ''
+          AND SUBSTRING_INDEX(SUBSTRING_INDEX(number_location, ',', 2), ',', -1) = #{province}
+          AND call_start_time &gt;= #{begin}
+          AND call_start_time &lt; #{end}
+        GROUP BY city
+    </select>
+
+    <!-- 坐席绩效 TOP10：排除 AI 伪坐席（AI 段话单 agent_name='AI智能坐席'） -->
+    <select id="selectAgentRank" resultType="java.util.HashMap">
+        SELECT agent_id                                                        AS agentId,
+               agent_name                                                      AS agentName,
+               COUNT(*)                                                        AS callCount,
+               SUM(CASE WHEN answer_flag = 0 THEN 1 ELSE 0 END)                AS answeredCount,
+               AVG(CASE WHEN answer_flag = 0 THEN TIMESTAMPDIFF(SECOND, answer_time, call_end_time) END) AS avgDurationSec
+        FROM call_record
+        WHERE del_flag = 0
+          AND agent_name IS NOT NULL
+          AND agent_name != ''
+          AND agent_name != 'AI智能坐席'
+          AND call_start_time &gt;= #{begin}
+          AND call_start_time &lt; #{end}
+        GROUP BY agent_id, agent_name
+        ORDER BY callCount DESC
+        LIMIT 10
+    </select>
+
+    <!-- 接听方式原始聚合：仅接通呼入；route_type 1/4=软电话坐席 7=座机 8=AI(再按 transfer_human 拆) 5/6=IVR放音 -->
+    <select id="selectAnswerType" resultType="java.util.HashMap">
+        SELECT r.route_type       AS routeType,
+               c.transfer_human   AS transferHuman,
+               COUNT(*)           AS cnt
+        FROM call_record c
+                 LEFT JOIN call_route r ON c.route_id = r.id
+        WHERE c.del_flag = 0
+          AND c.direction = 2
+          AND c.answer_flag = 0
+          AND c.call_start_time &gt;= #{begin}
+          AND c.call_start_time &lt; #{end}
+        GROUP BY r.route_type, c.transfer_human
+    </select>
+
+    <!-- 未接通原因原始聚合：ringingCount 用于呼入侧细分"振铃后放弃" -->
+    <select id="selectUnanswered" resultType="java.util.HashMap">
+        SELECT direction                                                                    AS direction,
+               answer_flag                                                                  AS answerFlag,
+               SUM(CASE WHEN ringing_time IS NOT NULL THEN 1 ELSE 0 END)                    AS ringingCount,
+               COUNT(*)                                                                     AS cnt
+        FROM call_record
+        WHERE del_flag = 0
+          AND answer_flag != 0
+          AND call_start_time &gt;= #{begin}
+          AND call_start_time &lt; #{end}
+        GROUP BY direction, answer_flag
+    </select>
+
+    <!-- 挂机方向（接通通话）：1主叫挂机(客户先挂) 2被叫挂机 3系统挂机 -->
+    <select id="selectHangup" resultType="java.util.HashMap">
+        SELECT SUM(CASE WHEN hangup_dir = 1 THEN 1 ELSE 0 END) AS callerHangup,
+               SUM(CASE WHEN hangup_dir = 2 THEN 1 ELSE 0 END) AS calleeHangup,
+               SUM(CASE WHEN hangup_dir = 3 THEN 1 ELSE 0 END) AS systemHangup
+        FROM call_record
+        WHERE del_flag = 0
+          AND answer_flag = 0
+          AND call_start_time &gt;= #{begin}
+          AND call_start_time &lt; #{end}
+    </select>
+
+    <!-- 分布分桶：时长(接通通话 answer_time~call_end_time) d1-d6；接通耗时(call_start_time~bridge_time) s1-s6 -->
+    <select id="selectDist" resultType="java.util.HashMap">
+        SELECT SUM(CASE WHEN TIMESTAMPDIFF(SECOND, answer_time, call_end_time) &lt; 30 THEN 1 ELSE 0 END)              AS d1,
+               SUM(CASE WHEN TIMESTAMPDIFF(SECOND, answer_time, call_end_time) BETWEEN 30 AND 59 THEN 1 ELSE 0 END)   AS d2,
+               SUM(CASE WHEN TIMESTAMPDIFF(SECOND, answer_time, call_end_time) BETWEEN 60 AND 179 THEN 1 ELSE 0 END)  AS d3,
+               SUM(CASE WHEN TIMESTAMPDIFF(SECOND, answer_time, call_end_time) BETWEEN 180 AND 299 THEN 1 ELSE 0 END) AS d4,
+               SUM(CASE WHEN TIMESTAMPDIFF(SECOND, answer_time, call_end_time) BETWEEN 300 AND 599 THEN 1 ELSE 0 END) AS d5,
+               SUM(CASE WHEN TIMESTAMPDIFF(SECOND, answer_time, call_end_time) &gt;= 600 THEN 1 ELSE 0 END)             AS d6,
+               SUM(CASE WHEN bridge_time IS NOT NULL AND TIMESTAMPDIFF(SECOND, call_start_time, bridge_time) &lt; 5 THEN 1 ELSE 0 END)              AS s1,
+               SUM(CASE WHEN bridge_time IS NOT NULL AND TIMESTAMPDIFF(SECOND, call_start_time, bridge_time) BETWEEN 5 AND 9 THEN 1 ELSE 0 END)   AS s2,
+               SUM(CASE WHEN bridge_time IS NOT NULL AND TIMESTAMPDIFF(SECOND, call_start_time, bridge_time) BETWEEN 10 AND 19 THEN 1 ELSE 0 END) AS s3,
+               SUM(CASE WHEN bridge_time IS NOT NULL AND TIMESTAMPDIFF(SECOND, call_start_time, bridge_time) BETWEEN 20 AND 29 THEN 1 ELSE 0 END) AS s4,
+               SUM(CASE WHEN bridge_time IS NOT NULL AND TIMESTAMPDIFF(SECOND, call_start_time, bridge_time) BETWEEN 30 AND 59 THEN 1 ELSE 0 END) AS s5,
+               SUM(CASE WHEN bridge_time IS NOT NULL AND TIMESTAMPDIFF(SECOND, call_start_time, bridge_time) &gt;= 60 THEN 1 ELSE 0 END)             AS s6
+        FROM call_record
+        WHERE del_flag = 0
+          AND call_start_time &gt;= #{begin}
+          AND call_start_time &lt; #{end}
+    </select>
+
+    <!-- 时段热力原始聚合：DAYOFWEEK 周日=1..周六=7（Service 转 java 周一=0..周日=6） -->
+    <select id="selectHeatmap" resultType="java.util.HashMap">
+        SELECT DAYOFWEEK(call_start_time) AS weekDay,
+               HOUR(call_start_time)      AS hourOfDay,
+               COUNT(*)                   AS cnt
+        FROM call_record
+        WHERE del_flag = 0
+          AND call_start_time &gt;= #{begin}
+          AND call_start_time &lt; #{end}
+        GROUP BY weekDay, hourOfDay
+    </select>
+
+    <!-- AI 转人工按天：AI 接听量 + 转人工量（比率 Service 算，无 AI 接听日为 null） -->
+    <select id="selectAiTransfer" resultType="java.util.HashMap">
+        SELECT DATE_FORMAT(call_start_time, '%m-%d')           AS label,
+               SUM(CASE WHEN is_ai_first = 1 THEN 1 ELSE 0 END) AS aiAnswered,
+               SUM(CASE WHEN transfer_human = 1 THEN 1 ELSE 0 END) AS transferred
+        FROM call_record
+        WHERE del_flag = 0
+          AND call_start_time &gt;= #{begin}
+          AND call_start_time &lt; #{end}
+        GROUP BY label
+        ORDER BY MIN(call_start_time)
+    </select>
+
+    <!-- 我的今日：agent 维度（AI 转给我 = transfer_human=1 AND agent_id=我） -->
+    <select id="selectMyOverview" resultType="java.util.HashMap">
+        SELECT COUNT(*)                                                                           AS callCount,
+               SUM(CASE WHEN answer_flag = 0 THEN 1 ELSE 0 END)                                   AS answeredCount,
+               SUM(CASE WHEN answer_flag = 0 THEN TIMESTAMPDIFF(SECOND, answer_time, call_end_time) ELSE 0 END) AS totalDurationSec,
+               SUM(CASE WHEN transfer_human = 1 THEN 1 ELSE 0 END)                                AS aiTransferToMe
+        FROM call_record
+        WHERE del_flag = 0
+          AND agent_id = #{agentId}
+          AND call_start_time &gt;= #{begin}
+          AND call_start_time &lt; #{end}
+    </select>
+
+    <!-- 我的最近通话快照：对端号码方向在 Service 拼（呼入=主叫/呼出=被叫） -->
+    <select id="selectMyRecent" resultType="java.util.HashMap">
+        SELECT id                                                                                             AS id,
+               call_id                                                                                        AS callId,
+               caller_number                                                                                  AS callerNumber,
+               callee_number                                                                                  AS calleeNumber,
+               direction                                                                                      AS direction,
+               answer_flag                                                                                    AS answerFlag,
+               transfer_human                                                                                 AS transferHuman,
+               CASE WHEN answer_flag = 0 THEN TIMESTAMPDIFF(SECOND, answer_time, call_end_time) ELSE 0 END     AS durationSec,
+               call_start_time                                                                                AS startTime
+        FROM call_record
+        WHERE del_flag = 0
+          AND agent_id = #{agentId}
+        ORDER BY call_start_time DESC
+        LIMIT #{limitNum}
+    </select>
+</mapper>

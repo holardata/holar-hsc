@@ -1,0 +1,278 @@
+# 本文件基于 openCallHub（GPL-3.0）修改：修改者 jackzhang，2026-09
+# Modified from openCallHub (GPL-3.0) by jackzhang, 2026-09.
+server:
+  port: 4320
+  forward-headers-strategy: framework
+  # 添加压缩配置
+  compression:
+    enabled: true
+    mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json
+    min-response-size: 1024
+
+spring:
+  application:
+    name: hsc-api
+  main:
+    banner-mode: off # 关闭启动 banner（佛祖保佑图），彻底不打印
+  # 添加配置元数据支持
+  config:
+    import: optional:classpath:config/application-{profile}.yml
+  
+  datasource:
+    type: com.alibaba.druid.pool.DruidDataSource
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://mysql:3306/holarSmartCall?createDatabaseIfNotExist=true&useSSL=false&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true&useServerPrepStmts=true&cachePrepStmts=true
+    username: root
+    password: 123456
+    druid:
+      # 连接池配置
+      initialSize: 5
+      minIdle: 10
+      maxActive: 50
+      maxWait: 60000
+      # 连接池空闲连接检测
+      timeBetweenEvictionRunsMillis: 60000
+      minEvictableIdleTimeMillis: 300000
+      validationQuery: SELECT 1
+      testWhileIdle: true
+      testOnBorrow: false
+      testOnReturn: false
+      # 连接池配置
+      poolPreparedStatements: true
+      maxPoolPreparedStatementPerConnectionSize: 20
+      # 监控配置
+      filter:
+        stat:
+          enabled: true
+          log-slow-sql: true
+          slow-sql-millis: 1000
+        wall:
+          config:
+            multi-statement-allow: true
+        slf4j:
+          enabled: true
+          statement-log-enabled: false
+          result-set-log-enabled: false
+          connection-log-enabled: false
+          transaction-log-enabled: false
+      # 连接池监控
+      webStatFilter:
+        enabled: true
+        url-pattern: /*
+        exclusions: "*.js,*.gif,*.jpg,*.png,*.css,*.ico,/druid/*"
+      statViewServlet:
+        enabled: true
+        url-pattern: /druid/*
+        reset-enable: false
+        login-username: admin
+        login-password: admin123
+
+  data:
+    redis:
+      host: redis
+      port: 6379
+      password: 
+      timeout: 10s
+      database: 0
+      # 连接池配置
+      jedis:
+        pool:
+          min-idle: 5
+          max-idle: 20
+          max-active: 50
+          max-wait: 3000ms
+          time-between-eviction-runs: 60s
+      # 集群配置（如果需要）
+      # cluster:
+      #   nodes: 127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003
+      # 哨兵配置（如果需要）
+      # sentinel:
+      #   master: mymaster
+      #   nodes: 127.0.0.1:26379,127.0.0.1:26380,127.0.0.1:26381
+      client-type: jedis
+  # 缓存配置
+  cache:
+    type: redis
+    redis:
+      time-to-live: 30m
+      cache-null-values: false
+      use-key-prefix: true
+      key-prefix: "hsc:"
+  # 其他配置保持不变
+  #  rabbitmq:
+  #    host: 127.0.0.1
+  #    port: 5672
+  #    username: guest
+  #    password: guest
+  #    virtual-host: /
+  #    publisher-confirm-type: SIMPLE
+  #    publisher-returns: true
+  #    listener:
+  #      simple:
+  #        acknowledge-mode: manual
+  #        default-requeue-rejected: true
+  #        retry:
+  #          enabled: true
+  #          max-attempts: 3
+  #      direct:
+  #        acknowledge-mode: manual
+  #        retry:
+  #          enabled: true
+  ai:
+    dashscope:
+      api-key: 23
+    chat:
+      model: qwq-plus
+
+    deepseek:
+      api-key: 123
+      base-url: "https://api.deepseek.com"
+      chat:
+        options:
+          model: deepseek-chat
+      embedding:
+        enabled: false
+  quartz:
+    job-store-type: jdbc
+    jdbc:
+      initialize-schema: always
+    properties:
+      org:
+        quartz:
+          scheduler:
+            instanceName: hsc-clusteredScheduler
+            instanceId: AUTO
+          threadPool:
+            class: org.quartz.simpl.SimpleThreadPool
+            threadCount: 10
+            threadPriority: 5
+            threadNamePrefix: Quartz-
+          jobStore:
+            class: org.springframework.scheduling.quartz.LocalDataSourceJobStore
+            driverDelegateClass: org.quartz.impl.jdbcjobstore.StdJDBCDelegate
+            tablePrefix: QRTZ_
+            isClustered: true
+            useProperties: false
+            clusterCheckinInterval: 1000
+  liquibase:
+    enabled: true
+    change-log: classpath:liquibase/changelog-master.xml
+    default-schema: holarSmartCall
+    database-change-log-table: databasechangelog
+    database-change-log-lock-table: databasechangeloglock
+    clear-checksums: true
+
+# FreeSWITCH配置
+freeswitch:
+  thread-num: 64
+  queue-capacity: 10000
+
+# 旁路 ASR 配置（FS mod_audio_fork 把人工通话单方音频 WS 推流给 ai-callbot 做流式转写）
+hsc:
+  bypass:
+    # ai-callbot 旁路 WS 接收地址（mod_audio_fork 推流目标；URL query 由 hsc 拼 callId/role/agentId）
+    # 环境变量 HSC_BYPASS_ASR_BOT_WS 注入；hsc 在容器、ai-callbot host 网络时改 host.docker.internal:9091
+    asr-bot-ws: ${HSC_BYPASS_ASR_BOT_WS:ws://127.0.0.1:9091/asr/bypass}
+  ai-callbot:
+    # ai-callbot SIP 接听地址(IP:port)，AI 智能坐席路由的 originate 目标（无注册 IP 直连 UAS）。
+    # 环境变量 HSC_AI_CALLBOT_SIP_URI 注入；部署时填实际 ai-callbot 的 IP:port（注意 ai-callbot 实际 SIP 端口，可能 5061 非 5060）
+    sip-uri: ${HSC_AI_CALLBOT_SIP_URI:}
+    # AI 转人工走技能组选空闲坐席（ai_callbot_config.config_json.transfer_skill_id 配，前端 AI 配置页），
+    # 不再用固定 transfer-target 环境变量
+  licsrv:
+    # license 许可证服务基地址（同宿主机部署）。环境变量 HSC_LICSRV_URL 注入
+    # （docker-compose 配 http://host.docker.internal:29000/licsrv，容器经 extra_hosts host-gateway 解析宿主机）
+    url: ${HSC_LICSRV_URL:http://host.docker.internal:29000/licsrv}
+
+# 线程池配置
+thread-pool:
+  core-pool-size: 10
+  max-pool-size: 50
+  queue-capacity: 1000
+  keep-alive-seconds: 60
+  thread-name-prefix: "hsc-"
+
+# 日志配置
+logging:
+  level:
+    com.hsc: debug
+  config: classpath:logback-spring.xml
+
+
+
+swagger:
+  title: 呼叫中心系统
+  description: 呼叫中心系统文档
+  version: v1.0.0
+
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+  api-docs:
+    path: /v3/api-docs
+    enabled: true
+
+
+fs:
+  xml-curl:
+    auth-scheme: basic # basic、digest
+    secretKey: b4c91178-c00e-7e42-6a9b-2c470eb0fb30 # 密钥
+
+system:
+  setting:
+    fsProfile: /record  # freeswitch文件地址
+    fsFileSuffix: .wav # freeswitch文件后缀
+    fsSoundsDir: /usr/local/freeswitch/share/freeswitch/sounds # FS放音目录(sound_prefix，FsClient下发playback拼绝对路径用)
+    baseProfile: /temp # 文件上传地址
+    uploadType: local # 默认上传类型 loca-本地上传、tx-腾讯云cos、ali-阿里云
+    ali-config: # 阿里云cos配置
+      cos:
+        host: 231
+        bucketName: 12312
+    tx-config: # 腾讯云cos配置
+      cos:
+        host: 12321
+        bucketName: 21321
+        regionName: 213
+        accessKey: 2312
+        secretKey: 123
+
+# 文件服务端口配置
+file-server:
+  port: 9527
+  bossThreads: 1
+  workerThreads: 4
+  heartbeat:
+    maxLostAttempts: 3
+    checkInterval: 5000
+
+
+# 滑块验证码配置
+captcha:
+  # 如果项目中使用到了redis，滑块验证码会自动把验证码数据存到redis中， 这里配置redis的key的前缀,默认是captcha:slider
+  prefix: captcha
+  # 验证码过期时间，默认是2分钟,单位毫秒， 可以根据自身业务进行调整
+  expire:
+    # 默认缓存时间 2分钟
+    default: 10000
+    # 针对 点选验证码 过期时间设置为 2分钟， 因为点选验证码验证比较慢，把过期时间调整大一些
+    WORD_IMAGE_CLICK: 20000
+  # 使用加载系统自带的资源， 默认是 false
+  init-default-resource: false
+  # 缓存控制， 默认为false不开启
+  local-cache-enabled: true
+  # 验证码会提前缓存一些生成好的验证数据， 默认是20
+  local-cache-size: 20
+  # 缓存拉取失败后等待时间 默认是 5秒钟
+  local-cache-wait-time: 5000
+  # 缓存检查间隔 默认是2秒钟
+  local-cache-period: 2000
+  secondary:
+    # 二次验证， 默认false 不开启
+    enabled: false
+    # 二次验证过期时间， 默认 2分钟
+    expire: 120000
+    # 二次验证缓存key前缀，默认是 captcha:secondary
+    keyPrefix: "captcha:secondary"

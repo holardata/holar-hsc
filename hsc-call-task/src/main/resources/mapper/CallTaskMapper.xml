@@ -1,0 +1,276 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 本文件基于 openCallHub（GPL-3.0）修改：修改者 jackzhang，2026-09 -->
+<!-- Modified from openCallHub (GPL-3.0) by jackzhang, 2026-09. -->
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hsc.calltask.mapper.CallTaskMapper">
+
+    <resultMap type="com.hsc.calltask.domain.vo.CallTaskVo" id="CallTaskMap">
+        <result property="id" column="id" jdbcType="INTEGER"/>
+        <result property="name" column="name" jdbcType="VARCHAR"/>
+        <result property="status" column="status" jdbcType="INTEGER"/>
+        <result property="priority" column="priority" jdbcType="INTEGER"/>
+        <result property="startDay" column="start_day" jdbcType="TIMESTAMP"/>
+        <result property="endDay" column="end_day" jdbcType="TIMESTAMP"/>
+        <result property="sTime" column="s_time" jdbcType="VARCHAR"/>
+        <result property="eTime" column="e_time" jdbcType="VARCHAR"/>
+        <result property="workCycle" column="work_cycle" jdbcType="VARCHAR"/>
+        <result property="assignmentType" column="assignment_type" jdbcType="INTEGER"/>
+<!--        <result property="agentList" column="agent_list" jdbcType="VARCHAR"/>-->
+        <result property="phonePoolId" column="phone_pool_id" jdbcType="INTEGER"/>
+        <result property="remark" column="remark" jdbcType="VARCHAR"/>
+        <result property="createBy" column="create_by" jdbcType="INTEGER"/>
+        <result property="createTime" column="create_time" jdbcType="TIMESTAMP"/>
+        <result property="updateBy" column="update_by" jdbcType="INTEGER"/>
+        <result property="updateTime" column="update_time" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <resultMap id="CallTaskContactMap" type="com.hsc.calltask.domain.vo.CallTaskContactVo">
+        <result property="id" column="id" jdbcType="BIGINT"/>
+        <result property="taskId" column="task_id" jdbcType="BIGINT"/>
+        <result property="taskName" column="task_name" jdbcType="VARCHAR"/>
+        <result property="phone" column="phone" jdbcType="VARCHAR"/>
+        <result property="name" column="name" jdbcType="VARCHAR"/>
+        <result property="ext" column="ext" typeHandler="com.hsc.system.handler.JsonObjectTypeHandler"/>
+        <result property="source" column="source" jdbcType="INTEGER"/>
+        <result property="assignStatus" column="status" jdbcType="INTEGER"/>
+        <result property="crowdId" column="crowd_id" jdbcType="BIGINT"/>
+        <result property="crowdName" column="crowd_name" jdbcType="VARCHAR"/>
+        <result property="templateId" column="template_id" jdbcType="BIGINT"/>
+        <result property="templateName" column="template_name" jdbcType="VARCHAR"/>
+        <result property="agentId" column="agent_id" jdbcType="BIGINT"/>
+        <result property="agentName" column="agent_name" jdbcType="VARCHAR"/>
+        <result property="assignTime" column="assign_time" jdbcType="TIMESTAMP"/>
+        <result property="callStatus" column="call_status" jdbcType="INTEGER"/>
+        <result property="callResult" column="call_result" jdbcType="INTEGER"/>
+        <result property="lastDialTime" column="last_dial_time" jdbcType="TIMESTAMP"/>
+        <result property="lastTalkDuration" column="last_talk_duration" jdbcType="INTEGER"/>
+        <result property="attemptCount" column="attempt_count" jdbcType="INTEGER"/>
+        <result property="scheduledTime" column="scheduled_time" jdbcType="TIMESTAMP"/>
+        <result property="remark" column="remark" jdbcType="VARCHAR"/>
+        <result property="createBy" column="create_by" jdbcType="INTEGER"/>
+        <result property="createTime" column="create_time" jdbcType="TIMESTAMP"/>
+        <result property="updateBy" column="update_by" jdbcType="INTEGER"/>
+        <result property="updateTime" column="update_time" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <sql id="selectCallTaskInfoVo">
+
+    </sql>
+
+    <select id="getList" resultMap="CallTaskMap">
+        select
+        ct.id,
+        ct.name,
+        ct.status,
+        ct.priority,
+        ct.start_day,
+        ct.end_day,
+        ct.s_time,
+        ct.e_time,
+        ct.work_cycle,
+        ct.assignment_type,
+        ct.agent_list,
+        ct.phone_pool_id,
+        ct.remark,
+        ct.create_by,
+        ct.create_time,
+        ct.update_by,
+        ct.update_time,
+        ct.del_flag,
+        cdp.name as phone_pool_name
+        from call_task ct
+        left join call_display_pool cdp on ct.phone_pool_id = cdp.id
+        <where>
+            <if test="id != null">
+                and ct.id = #{id}
+            </if>
+            <if test="idList != null">
+                and ct.id in
+                <foreach item="item" collection="idList" separator="," open="(" close=")" index="">
+                    #{item}
+                </foreach>
+            </if>
+            <if test="name != null and name != ''">
+                and ct.name like concat('%',#{name},'%')
+            </if>
+            <if test="status != null">
+                and ct.status = #{status}
+            </if>
+            <if test="startDay != null">
+                and ct.start_day &gt;= #{startDay}
+            </if>
+            <if test="endDay != null">
+                and ct.end_day &lt;= #{endDay}
+            </if>
+            <if test="beginTime != null">
+                and ct.create_time &gt;= #{beginTime}
+            </if>
+            <if test="endTime != null">
+                and ct.create_time &lt;= #{endTime}
+            </if>
+            and ct.del_flag = 0
+        </where>
+        order by ct.id desc
+    </select>
+    <select id="getTaskContactList" resultMap="CallTaskContactMap">
+        select
+        cta.id,
+        cta.task_id,
+        ctask.name as task_name,
+        cta.phone,
+        cta.name,
+        cta.ext,
+        cta.source,
+        cta.status,
+        cta.crowd_id,
+        cc.name as crowd_name,
+        cta.template_id,
+        ct.name as template_name,
+        cta.agent_id,
+        sa.name as agent_name,
+        cta.assignment_time,
+        cta.call_status,
+        cta.call_result,
+        cta.last_dial_time,
+        cta.last_talk_duration,
+        cta.attempt_count,
+        cta.scheduled_time,
+        cta.remark,
+        cta.create_by,
+        cta.create_time,
+        cta.update_by,
+        cta.update_time
+        from call_task_assignment cta
+        left join call_task ctask on cta.task_id = ctask.id
+        left join customer_crowd cc on cta.crowd_id = cc.id
+        left join customer_template ct on cta.template_id = ct.id
+        left join sip_agent sa on cta.agent_id = sa.id
+        <where>
+            <if test="taskId != null">
+                and cta.task_id = #{taskId}
+            </if>
+            <if test="phone != null and phone != ''">
+                and cta.phone like concat('%',#{phone},'%')
+            </if>
+            <if test="name != null and name != ''">
+                and cta.name like concat('%',#{name},'%')
+            </if>
+            <if test="source != null">
+                and cta.source = #{source}
+            </if>
+            <if test="status != null">
+                and cta.status = #{status}
+            </if>
+            <if test="agentIds != null and agentIds.size() > 0">
+                and cta.agent_id in
+                <foreach item="item" collection="agentIds" separator="," open="(" close=")" index="">
+                    #{item}
+                </foreach>
+            </if>
+            <if test="callStatus != null">
+                and cta.call_status = #{callStatus}
+            </if>
+            <if test="assignStartTime != null">
+                and cta.assignment_time &gt;= #{assignStartTime}
+            </if>
+            <if test="assignEndTime != null">
+                and cta.assignment_time &lt;= #{assignEndTime}
+            </if>
+            <if test="beginTime != null">
+                and cta.create_time &gt;= #{beginTime}
+            </if>
+            <if test="endTime != null">
+                and cta.create_time &lt;= #{endTime}
+            </if>
+            and cta.del_flag = 0
+        </where>
+        order by cta.id desc
+    </select>
+<!-- dashboard-analytics-revamp: 进行中任务进度聚合（总数/已拨/接通；接通=最近结果 call_result=1） -->
+    <select id="getTaskProgress" resultType="com.hsc.calltask.domain.vo.TaskProgressVo">
+        SELECT t.id                                                          AS taskId,
+               t.name                                                         AS name,
+               COUNT(a.id)                                                    AS totalNum,
+               SUM(CASE WHEN a.call_status = 1 THEN 1 ELSE 0 END)             AS dialedNum,
+               SUM(CASE WHEN a.call_result = 1 THEN 1 ELSE 0 END)             AS connectedNum
+        FROM call_task t
+                 LEFT JOIN call_task_assignment a ON a.task_id = t.id AND a.del_flag = 0
+        WHERE t.del_flag = 0
+          AND t.status = 1
+        GROUP BY t.id, t.name
+        ORDER BY t.create_time DESC
+    </select>
+
+    <!-- 坐席任务汇总（工作台任务 tab 一级列表）：仅进行中任务、本人已分配，
+         INNER JOIN 排除无分配任务；undialed=0 仍返回（前端置底显示已完成） -->
+    <select id="getMyTaskSummary" resultType="com.hsc.calltask.domain.vo.CallTaskMySummaryVo">
+        SELECT t.id   AS taskId,
+               t.name AS taskName,
+               COUNT(a.id)                                        AS total,
+               SUM(CASE WHEN a.call_status = 0 THEN 1 ELSE 0 END) AS undialed
+        FROM call_task t
+                 INNER JOIN call_task_assignment a ON a.task_id = t.id
+        WHERE t.del_flag = 0
+          AND t.status = 1
+          AND a.del_flag = 0
+          AND a.status = 1
+          AND a.agent_id = #{agentId}
+        GROUP BY t.id, t.name
+        ORDER BY undialed DESC, t.id DESC
+    </select>
+
+<!-- customer-pool-outbound-feedback: 拨打历史明细（assignment/customer 维度，时间倒序） -->
+    <resultMap id="CallTaskDialLogMap" type="com.hsc.calltask.domain.vo.CallTaskDialLogVo">
+        <result property="id" column="id" jdbcType="BIGINT"/>
+        <result property="taskId" column="task_id" jdbcType="BIGINT"/>
+        <result property="taskName" column="task_name" jdbcType="VARCHAR"/>
+        <result property="assignmentId" column="assignment_id" jdbcType="BIGINT"/>
+        <result property="agentId" column="agent_id" jdbcType="BIGINT"/>
+        <result property="agentName" column="agent_name" jdbcType="VARCHAR"/>
+        <result property="customerId" column="customer_id" jdbcType="BIGINT"/>
+        <result property="phone" column="phone" jdbcType="VARCHAR"/>
+        <result property="callRecordId" column="call_record_id" jdbcType="BIGINT"/>
+        <result property="callId" column="call_id" jdbcType="VARCHAR"/>
+        <result property="callResult" column="call_result" jdbcType="INTEGER"/>
+        <result property="hangupCause" column="hangup_cause" jdbcType="VARCHAR"/>
+        <result property="disposition" column="disposition" jdbcType="VARCHAR"/>
+        <result property="dispositionRemark" column="disposition_remark" jdbcType="VARCHAR"/>
+        <result property="dialTime" column="dial_time" jdbcType="TIMESTAMP"/>
+        <result property="talkDuration" column="talk_duration" jdbcType="INTEGER"/>
+    </resultMap>
+    <select id="getDialLogList" resultMap="CallTaskDialLogMap">
+        select
+        l.id,
+        l.task_id,
+        ct.name as task_name,
+        l.assignment_id,
+        l.agent_id,
+        sa.name as agent_name,
+        l.customer_id,
+        l.phone,
+        l.call_record_id,
+        l.call_id,
+        l.call_result,
+        l.hangup_cause,
+        l.disposition,
+        l.disposition_remark,
+        l.dial_time,
+        l.talk_duration
+        from call_task_dial_log l
+        left join call_task ct on l.task_id = ct.id
+        left join sip_agent sa on l.agent_id = sa.id
+        <where>
+            <if test="assignmentId != null">
+                and l.assignment_id = #{assignmentId}
+            </if>
+            <if test="customerId != null">
+                and l.customer_id = #{customerId}
+            </if>
+            <if test="taskId != null">
+                and l.task_id = #{taskId}
+            </if>
+            and l.del_flag = 0
+        </where>
+        order by l.dial_time desc, l.id desc
+    </select>
+</mapper>
